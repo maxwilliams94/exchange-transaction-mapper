@@ -1,0 +1,8 @@
+venv/
+
+files/input/
+files/output/
+
+
+
+.DS_Store
