@@ -1,8 +1,20 @@
+# Virtual environments
 venv/
+.venv/
 
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Project data directories
 files/input/
 files/output/
 
-
-
+# macOS metadata
 .DS_Store
