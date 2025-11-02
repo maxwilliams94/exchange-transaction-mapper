@@ -1,27 +1,33 @@
 from __future__ import annotations
 
 import csv
-from decimal import Decimal
+from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from ..constants import OUTPUT_HEADERS
-from ..utils import (
-    abs_decimal_to_str,
-    decimal_to_str,
-    format_market,
-    is_fiat,
-    parse_decimal,
-    parse_iso_timestamp,
-)
+from ..utils import format_market, is_fiat, parse_decimal
 
 
-def _read_nbx_rows(file_path: Path) -> List[Dict[str, str]]:
+@dataclass
+class NbxTradeBreakdown:
+    side: str
+    base_amount: Decimal
+    base_currency: str
+    quote_amount: Decimal
+    quote_currency: str
+    price: Optional[Decimal]
+    market: str
+
+
+def load_nbx_rows(file_path: Path) -> Tuple[List[Dict[str, str]], Dict[str, Any]]:
+    """Read NBX annual report exports which use semicolon delimiters."""
+
     with file_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.reader(handle, delimiter=";")
         header = next(reader, None)
         if not header:
-            return []
+            return [], {}
         header = [col.strip().strip('"') for col in header]
         rows: List[Dict[str, str]] = []
         for raw in reader:
@@ -30,19 +36,24 @@ def _read_nbx_rows(file_path: Path) -> List[Dict[str, str]]:
             normalized = [value.strip().strip('"') for value in raw]
             while len(normalized) < len(header):
                 normalized.append("")
-            row = {header[idx]: normalized[idx] for idx in range(len(header)) if header[idx]}
+            row = {
+                header[idx]: normalized[idx]
+                for idx in range(len(header))
+                if header[idx]
+            }
             rows.append(row)
-        return rows
+        return rows, {}
 
 
-def _map_trade(row: Dict[str, str]) -> Dict[str, str]:
-    tx_id = row.get("ID", "")
+def nbx_trade_breakdown(row: Dict[str, str]) -> Optional[NbxTradeBreakdown]:
+    tx_type = (row.get("Type") or "").strip().title()
+    if tx_type != "Trade":
+        return None
+
     amount_in = parse_decimal(row.get("In")) or Decimal("0")
     currency_in = (row.get("In-Currency") or "").upper()
     amount_out = parse_decimal(row.get("Out")) or Decimal("0")
     currency_out = (row.get("Out-Currency") or "").upper()
-    fee = parse_decimal(row.get("Fee"))
-    fee_currency = (row.get("Fee-Currency") or "").upper()
 
     if is_fiat(currency_in) and not is_fiat(currency_out):
         side = "SELL"
@@ -65,65 +76,20 @@ def _map_trade(row: Dict[str, str]) -> Dict[str, str]:
 
     filled_price: Optional[Decimal] = None
     if base_amount and quote_amount:
-        filled_price = quote_amount / base_amount
+        try:
+            filled_price = quote_amount / base_amount
+        except (ArithmeticError, InvalidOperation):  # pragma: no cover - defensive
+            filled_price = None
 
-    notes = row.get("Notes") or ""
+    notes = (row.get("Notes") or "").strip()
     market = notes.replace("/", "-") if notes else format_market(base_currency, quote_currency)
 
-    return {
-        "Id": f"nbx-{tx_id}",
-        "ExchangeId": tx_id,
-        "timeStamp": parse_iso_timestamp(row.get("Timestamp", "")),
-        "Status": "COMPLETED",
-        "Market": market,
-        "Exchange": "NBX",
-        "Side": side,
-        "TransactionType": "TRADE",
-        "FilledQuantity": abs_decimal_to_str(base_amount),
-        "FilledQuote": abs_decimal_to_str(quote_amount),
-        "FilledPrice": decimal_to_str(filled_price),
-        "Fee": abs_decimal_to_str(fee),
-        "FeeCurrency": fee_currency,
-    }
-
-
-def _map_deposit_withdraw(row: Dict[str, str], transaction_type: str, side: str) -> Dict[str, str]:
-    tx_id = row.get("ID", "")
-    amount = parse_decimal(row.get("In")) or parse_decimal(row.get("Out")) or Decimal("0")
-    currency = (row.get("In-Currency") or row.get("Out-Currency") or "").upper()
-    fee = parse_decimal(row.get("Fee"))
-    fee_currency = (row.get("Fee-Currency") or "").upper()
-    return {
-        "Id": f"nbx-{tx_id}",
-        "ExchangeId": tx_id,
-        "timeStamp": parse_iso_timestamp(row.get("Timestamp", "")),
-        "Status": "COMPLETED",
-        "Market": currency,
-        "Exchange": "NBX",
-        "Side": side,
-        "TransactionType": transaction_type,
-        "FilledQuantity": abs_decimal_to_str(amount),
-        "FilledQuote": "",
-        "FilledPrice": "",
-        "Fee": abs_decimal_to_str(fee),
-        "FeeCurrency": fee_currency,
-    }
-
-
-def map_nbx_file(file_path: Path, _rows: List[Dict[str, str]], _context: Dict[str, Any]) -> List[Dict[str, Any]]:
-    rows = _read_nbx_rows(file_path)
-    mapped: List[Dict[str, str]] = []
-    for row in rows:
-        tx_type = (row.get("Type") or "").strip().title()
-        if tx_type == "Trade":
-            mapped.append(_map_trade(row))
-        elif tx_type == "Deposit":
-            mapped.append(_map_deposit_withdraw(row, "DEPOSIT", "DEPOSIT"))
-        elif tx_type == "Withdraw":
-            mapped.append(_map_deposit_withdraw(row, "WITHDRAWAL", "WITHDRAW"))
-        else:
-            continue
-    ordered: List[Dict[str, Any]] = []
-    for row in mapped:
-        ordered.append({key: row.get(key, "") for key in OUTPUT_HEADERS})
-    return ordered
+    return NbxTradeBreakdown(
+        side=side,
+        base_amount=base_amount,
+        base_currency=base_currency,
+        quote_amount=quote_amount,
+        quote_currency=quote_currency,
+        price=filled_price,
+        market=market,
+    )

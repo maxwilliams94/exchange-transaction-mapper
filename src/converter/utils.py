@@ -91,6 +91,23 @@ def parse_firi_timestamp(raw: str) -> str:
         return raw
 
 
+def parse_kraken_timestamp(raw: str) -> str:
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    formats = [
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S",
+    ]
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(raw, fmt)
+            return dt.replace(tzinfo=timezone.utc).isoformat()
+        except ValueError:
+            continue
+    return raw
+
+
 def format_market(base: str, quote: Optional[str]) -> str:
     base_clean = (base or "").strip().upper()
     quote_clean = (quote or "").strip().upper()

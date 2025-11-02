@@ -1,0 +1,127 @@
+sources:
+  coinbase:
+    files:
+      - pattern: "*rewards*.csv"
+        mode: skip
+        reason: "Coinbase rewards export not yet mapped"
+      - pattern: "*transactions*.csv"
+        mode: row
+        loader: coinbase_transactions
+        expected_columns:
+          - ID
+          - Timestamp
+          - Transaction Type
+          - Asset
+          - Quantity Transacted
+          - Price Currency
+          - Price at Transaction
+          - Subtotal
+          - Total (inclusive of fees and/or spread)
+          - Fees and/or Spread
+        skip_when:
+          - 'not row.get("ID")'
+        precompute:
+          quantity: 'decimal(row.get("Quantity Transacted"))'
+          subtotal: 'decimal(row.get("Subtotal"))'
+          total_inclusive: 'decimal(row.get("Total (inclusive of fees and/or spread)"))'
+          explicit_price: 'decimal(row.get("Price at Transaction"))'
+          fee_amount: 'decimal(row.get("Fees and/or Spread"))'
+          transaction_type_lower: '(row.get("Transaction Type") or "").strip().lower()'
+        mapping:
+          Id: 'f"coinbase-{row.get("ID", "").strip()}"'
+          ExchangeId: 'context.get("account_id") or row.get("ID")'
+          timeStamp: 'parse_coinbase_timestamp(row.get("Timestamp"))'
+          Status: '"COMPLETED"'
+          Market: 'format_market(row.get("Asset"), row.get("Price Currency"))'
+          Exchange: '"COINBASE"'
+          Side: 'coinbase_determine_side(row.get("Transaction Type"), quantity)'
+          TransactionType: 'coinbase_transaction_type(transaction_type_lower)'
+          FilledQuantity: 'abs_decimal_to_str(quantity)'
+          FilledQuote: 'abs_decimal_to_str(total_inclusive or subtotal)'
+          FilledPrice: 'decimal_to_str(explicit_price or coinbase_compute_price(total_inclusive or subtotal, quantity))'
+          Fee: 'abs_decimal_to_str(fee_amount)'
+          FeeCurrency: 'coinbase_fee_currency(row.get("Price Currency"), fee_amount)'
+
+  nbx:
+    files:
+      - pattern: "NBX_annual_report_*.csv"
+        mode: row
+        loader: nbx_semicolon
+        expected_columns:
+          - Timestamp
+          - Type
+          - ID
+          - In
+          - In-Currency
+          - Out
+          - Out-Currency
+          - Fee
+          - Fee-Currency
+          - Notes
+        skip_when:
+          - 'not row.get("Type")'
+        precompute:
+          tx_type: '(row.get("Type") or "").strip().title()'
+          trade: 'nbx_trade_breakdown(row)'
+          amount_in: 'decimal(row.get("In"))'
+          amount_out: 'decimal(row.get("Out"))'
+          fee_amount: 'decimal(row.get("Fee"))'
+          currency_in: '(row.get("In-Currency") or "").upper()'
+          currency_out: '(row.get("Out-Currency") or "").upper()'
+        mapping:
+          Id: 'f"nbx-{(row.get("ID") or "").strip()}"'
+          ExchangeId: 'row.get("ID")'
+          timeStamp: 'parse_iso_timestamp(row.get("Timestamp"))'
+          Status: '"COMPLETED"'
+          Market: 'trade.market if trade else (currency_in or currency_out)'
+          Exchange: '"NBX"'
+          Side: 'trade.side if trade else ("DEPOSIT" if tx_type == "Deposit" else "WITHDRAW")'
+          TransactionType: '"TRADE" if trade else ("DEPOSIT" if tx_type == "Deposit" else "WITHDRAWAL")'
+          FilledQuantity: 'abs_decimal_to_str(trade.base_amount) if trade else abs_decimal_to_str(amount_in or amount_out)'
+          FilledQuote: 'abs_decimal_to_str(trade.quote_amount) if trade else ""'
+          FilledPrice: 'decimal_to_str(trade.price) if trade else ""'
+          Fee: 'abs_decimal_to_str(fee_amount)'
+          FeeCurrency: '(row.get("Fee-Currency") or "").upper() if fee_amount else ""'
+
+  firi:
+    files:
+      - pattern: "*transactions*.csv"
+        mode: file
+        handler: firi_transactions
+        expected_columns:
+          - Transaction ID
+          - Match ID
+          - Action
+          - Currency
+          - Amount
+          - Created at
+        ignore_transaction_types:
+          - DEPOSIT
+          - WITHDRAWAL
+        id_sequence_prefix: firi
+        id_sequence_padding: 6
+      - pattern: "*trades*.csv"
+        mode: skip
+        reason: "Trades export skipped; use transactions for staking coverage"
+      - pattern: "*orders*.csv"
+        mode: skip
+        reason: "Orders export skipped by default"
+
+  kraken:
+    files:
+      - pattern: "*ledger*.csv"
+        mode: file
+        handler: kraken_ledger
+        expected_columns:
+          - txid
+          - refid
+          - time
+          - type
+          - asset
+          - amount
+          - fee
+        ignore_transaction_types:
+          - DEPOSIT
+          - WITHDRAWAL
+        id_sequence_prefix: kraken
+        id_sequence_padding: 6

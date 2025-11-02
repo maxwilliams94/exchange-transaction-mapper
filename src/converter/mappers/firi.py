@@ -90,7 +90,7 @@ def _map_match(match_id: str, rows: List[Dict[str, str]]) -> Dict[str, str]:
     timestamp_candidates = [ts for ts in timestamps if ts]
     timestamp = min(timestamp_candidates) if timestamp_candidates else ""
 
-    market = format_market(base_currency, quote_currency or "UNKNOWN")
+    market = format_market(base_currency, quote_currency)
 
     return {
         "Id": f"firi-match-{match_id}",
@@ -118,7 +118,7 @@ def _map_staking_reward(row: Dict[str, str]) -> Dict[str, str]:
         "ExchangeId": row.get("Transaction ID", ""),
         "timeStamp": timestamp,
         "Status": "COMPLETED",
-        "Market": format_market(currency, "UNKNOWN"),
+        "Market": currency,
         "Exchange": "FIRI",
         "Side": "BUY",
         "TransactionType": "STAKING_REWARD",
@@ -203,7 +203,7 @@ def _map_trades(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
             "ExchangeId": trade_id,
             "timeStamp": parse_firi_timestamp(row.get("Executed", "")),
             "Status": "COMPLETED",
-            "Market": format_market(base, quote or "UNKNOWN"),
+            "Market": format_market(base, quote),
             "Exchange": "FIRI",
             "Side": side,
             "TransactionType": "TRADE",
@@ -237,7 +237,7 @@ def _map_orders(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
             "ExchangeId": order_id,
             "timeStamp": parse_firi_timestamp(row.get("Created at", "")),
             "Status": status,
-            "Market": format_market(base_currency, quote_currency or "UNKNOWN"),
+            "Market": format_market(base_currency, quote_currency),
             "Exchange": "FIRI",
             "Side": side,
             "TransactionType": "ORDER",
@@ -268,3 +268,13 @@ def map_firi_file(_file_path: Path, rows: List[Dict[str, str]], _context: Dict[s
     else:
         mapped_rows = []
     return [_ensure_columns(row) for row in mapped_rows]
+
+
+def map_firi_transactions(
+    _file_path: Path, rows: List[Dict[str, str]], _context: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Dedicated entry for transaction exports when selected via config."""
+
+    if not rows:
+        return []
+    return [_ensure_columns(row) for row in _map_transactions(rows)]
