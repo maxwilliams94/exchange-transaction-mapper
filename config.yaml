@@ -1,10 +1,7 @@
 sources:
   coinbase:
     files:
-      - pattern: "*rewards*.csv"
-        mode: skip
-        reason: "Coinbase rewards export not yet mapped"
-      - pattern: "*transactions*.csv"
+      - pattern: "*.csv"
         mode: row
         loader: coinbase_transactions
         expected_columns:
@@ -85,7 +82,7 @@ sources:
 
   firi:
     files:
-      - pattern: "*transactions*.csv"
+      - pattern: "*_transactions*.csv"
         mode: file
         handler: firi_transactions
         expected_columns:
@@ -97,7 +94,6 @@ sources:
           - Created at
         ignore_transaction_types:
           - DEPOSIT
-          - WITHDRAWAL
         id_sequence_prefix: firi
         id_sequence_padding: 6
       - pattern: "*trades*.csv"
@@ -121,7 +117,6 @@ sources:
           - amount
           - fee
         ignore_transaction_types:
-          - DEPOSIT
           - WITHDRAWAL
         id_sequence_prefix: kraken
         id_sequence_padding: 6
