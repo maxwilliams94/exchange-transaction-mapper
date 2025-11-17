@@ -1,7 +1,7 @@
 OUTPUT_HEADERS = [
     "Id",
     "ExchangeId",
-    "timeStamp",
+    "Timestamp",
     "Status",
     "Market",
     "Exchange",

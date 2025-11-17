@@ -95,7 +95,7 @@ def _map_match(match_id: str, rows: List[Dict[str, str]]) -> Dict[str, str]:
     return {
         "Id": f"firi-match-{match_id}",
         "ExchangeId": match_id,
-        "timeStamp": timestamp,
+        "Timestamp": timestamp,
         "Status": "COMPLETED",
         "Market": market,
         "Exchange": "FIRI",
@@ -116,7 +116,7 @@ def _map_staking_reward(row: Dict[str, str]) -> Dict[str, str]:
     return {
         "Id": f"firi-staking-{row.get('Transaction ID', '')}",
         "ExchangeId": row.get("Transaction ID", ""),
-        "timeStamp": timestamp,
+        "Timestamp": timestamp,
         "Status": "COMPLETED",
         "Market": currency,
         "Exchange": "FIRI",
@@ -137,7 +137,7 @@ def _map_bank_entry(row: Dict[str, str], transaction_type: str, side: str) -> Di
     return {
         "Id": f"firi-{side.lower()}-{row.get('Transaction ID', '')}",
         "ExchangeId": row.get("Transaction ID", ""),
-        "timeStamp": timestamp,
+        "Timestamp": timestamp,
         "Status": "COMPLETED",
         "Market": currency,
         "Exchange": "FIRI",
@@ -171,7 +171,7 @@ def _map_transactions(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
         elif action == BANK_WITHDRAW_ACTION:
             mapped.append(_map_bank_entry(row, "WITHDRAWAL", "WITHDRAW"))
 
-    mapped.sort(key=lambda item: item.get("timeStamp", ""))
+    mapped.sort(key=lambda item: item.get("Timestamp", ""))
     return mapped
 
 
@@ -201,7 +201,7 @@ def _map_trades(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
         mapped.append({
             "Id": f"firi-trade-{trade_id}",
             "ExchangeId": trade_id,
-            "timeStamp": parse_firi_timestamp(row.get("Executed", "")),
+            "Timestamp": parse_firi_timestamp(row.get("Executed", "")),
             "Status": "COMPLETED",
             "Market": format_market(base, quote),
             "Exchange": "FIRI",
@@ -213,7 +213,7 @@ def _map_trades(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
             "Fee": "",
             "FeeCurrency": "",
         })
-    mapped.sort(key=lambda item: item.get("timeStamp", ""))
+    mapped.sort(key=lambda item: item.get("Timestamp", ""))
     return mapped
 
 
@@ -235,7 +235,7 @@ def _map_orders(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
         mapped.append({
             "Id": f"firi-order-{order_id}",
             "ExchangeId": order_id,
-            "timeStamp": parse_firi_timestamp(row.get("Created at", "")),
+            "Timestamp": parse_firi_timestamp(row.get("Created at", "")),
             "Status": status,
             "Market": format_market(base_currency, quote_currency),
             "Exchange": "FIRI",
@@ -247,7 +247,7 @@ def _map_orders(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
             "Fee": "",
             "FeeCurrency": "",
         })
-    mapped.sort(key=lambda item: item.get("timeStamp", ""))
+    mapped.sort(key=lambda item: item.get("Timestamp", ""))
     return mapped
 
 

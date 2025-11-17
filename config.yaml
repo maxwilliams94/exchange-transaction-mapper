@@ -30,7 +30,7 @@ sources:
         mapping:
           Id: 'f"coinbase-{row.get("ID", "").strip()}"'
           ExchangeId: 'context.get("account_id") or row.get("ID")'
-          timeStamp: 'parse_coinbase_timestamp(row.get("Timestamp"))'
+          Timestamp: 'parse_coinbase_timestamp(row.get("Timestamp"))'
           Status: '"COMPLETED"'
           Market: 'format_market(row.get("Asset"), row.get("Price Currency"))'
           Exchange: '"COINBASE"'
@@ -71,7 +71,7 @@ sources:
         mapping:
           Id: 'f"nbx-{(row.get("ID") or "").strip()}"'
           ExchangeId: 'row.get("ID")'
-          timeStamp: 'parse_iso_timestamp(row.get("Timestamp"))'
+          Timestamp: 'parse_iso_timestamp(row.get("Timestamp"))'
           Status: '"COMPLETED"'
           Market: 'trade.market if trade else (currency_in or currency_out)'
           Exchange: '"NBX"'

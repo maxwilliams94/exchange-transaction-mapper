@@ -58,7 +58,7 @@ def _map_reward(rows: List[KrakenLedgerRow]) -> Optional[Dict[str, Any]]:
     return {
         "Id": identifier,
         "ExchangeId": identifier,
-        "timeStamp": reward.time,
+        "Timestamp": reward.time,
         "Status": "COMPLETED",
         "Market": reward.asset,
         "Exchange": "KRAKEN",
@@ -135,7 +135,7 @@ def _map_trade_group(rows: List[KrakenLedgerRow]) -> Optional[Dict[str, Any]]:
     return {
         "Id": identifier,
         "ExchangeId": identifier,
-        "timeStamp": timestamp,
+        "Timestamp": timestamp,
         "Status": "COMPLETED",
         "Market": format_market(base_currency, quote_currency),
         "Exchange": "KRAKEN",
@@ -172,5 +172,5 @@ def map_kraken_ledger(
         if mapped_row:
             mapped.append({key: mapped_row.get(key, "") for key in OUTPUT_HEADERS})
 
-    mapped.sort(key=lambda row: row.get("timeStamp", ""))
+    mapped.sort(key=lambda row: row.get("Timestamp", ""))
     return mapped
