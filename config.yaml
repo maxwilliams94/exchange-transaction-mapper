@@ -26,7 +26,7 @@ sources:
           transaction_type_lower: '(row.get("Transaction Type") or "").strip().lower()'
         mapping:
           Id: 'f"coinbase-{row.get("ID", "").strip()}"'
-          ExchangeId: 'context.get("account_id") or row.get("ID")'
+          ExchangeId: 'row.get("ID") or context.get("account_id")'
           Timestamp: 'parse_coinbase_timestamp(row.get("Timestamp"))'
           Status: '"COMPLETED"'
           Market: 'format_market(row.get("Asset"), row.get("Price Currency"))'
