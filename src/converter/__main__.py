@@ -216,7 +216,6 @@ def _normalize_transaction_types(rows: List[Dict[str, Any]]) -> List[Dict[str, A
     """
     for row in rows:
         tx_type = (row.get("TransactionType") or "").strip().upper()
-        side = (row.get("Side") or "").strip().upper()
 
         # Map any withdraw variants to WITHDRAW
         if "WITHDRAW" in tx_type.upper():
