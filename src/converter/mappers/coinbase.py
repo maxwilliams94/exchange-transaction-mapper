@@ -10,13 +10,20 @@ from typing import Any, Dict, List, Optional, Tuple
 TRANSACTION_TYPE_MAP = {
     "sell": "TRADE",
     "buy": "TRADE",
-    "reward income": "REWARD",
+    "advanced trade sell": "TRADE",
+    "advanced trade buy": "TRADE",
+    "reward income": "STAKING_REWARD",
     "staking income": "STAKING_REWARD",
     "airdrop": "AIRDROP",
     "deposit": "DEPOSIT",
-    "withdrawal": "WITHDRAWAL",
+    "receive": "DEPOSIT",
+    "withdrawal": "WITHDRAW",
+    "exchange withdrawal": "WITHDRAW",
+    "pro withdrawal": "WITHDRAW",
+    "send": "WITHDRAW",
 }
 
+# Transaction types are normalized via TRANSACTION_TYPE_MAP to match downstream import expectations.
 
 def load_coinbase_rows(file_path: Path) -> Tuple[List[Dict[str, str]], Dict[str, Any]]:
     """Read a Coinbase export, extracting the account id metadata row."""

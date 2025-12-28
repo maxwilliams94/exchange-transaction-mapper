@@ -50,11 +50,26 @@ def _group_by_refid(rows: Iterable[KrakenLedgerRow]) -> Dict[str, List[KrakenLed
     return grouped
 
 
+def _determine_reward_type(subtype: str) -> str:
+    """Map Kraken subtype to transaction type."""
+    subtype_lower = subtype.lower()
+    if "staking" in subtype_lower:
+        return "STAKING_REWARD"
+    if "mining" in subtype_lower:
+        return "MINING_REWARD"
+    if "lending" in subtype_lower:
+        return "LENDING_REWARD"
+    if "fork" in subtype_lower:
+        return "FORK"
+    return "AIRDROP"
+
+
 def _map_reward(rows: List[KrakenLedgerRow]) -> Optional[Dict[str, Any]]:
     reward = rows[0]
     if not reward.asset:
         return None
     identifier = reward.refid or reward.txid
+    transaction_type = _determine_reward_type(reward.subtype)
     return {
         "Id": identifier,
         "ExchangeId": identifier,
@@ -63,7 +78,7 @@ def _map_reward(rows: List[KrakenLedgerRow]) -> Optional[Dict[str, Any]]:
         "Market": reward.asset,
         "Exchange": "KRAKEN",
         "Side": "BUY",
-        "TransactionType": "AIRDROP",
+        "TransactionType": transaction_type,
         "FilledQuantity": abs_decimal_to_str(reward.amount),
         "FilledQuote": "",
         "FilledPrice": "",

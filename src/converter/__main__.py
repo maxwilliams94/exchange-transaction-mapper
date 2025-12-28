@@ -205,6 +205,45 @@ def _filter_transaction_types(
     return filtered
 
 
+def _normalize_transaction_types(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Normalize TransactionType values to the allowed subset.
+
+    Rules:
+    - Preserve 'TRADE' for trades (TCrypto expects this)
+    - Map any withdraw variants (WITHDRAW/WITHDRAWAL/EXCHANGE WITHDRAWAL/PRO WITHDRAWAL) to 'WITHDRAW'
+    - Map staking/reward variants to 'STAKING_REWARD'
+    - Keep 'DEPOSIT' and standard types unchanged
+    """
+    for row in rows:
+        tx_type = (row.get("TransactionType") or "").strip().upper()
+        side = (row.get("Side") or "").strip().upper()
+
+        # Map any withdraw variants to WITHDRAW
+        if "WITHDRAW" in tx_type.upper():
+            row["TransactionType"] = "WITHDRAW"
+            continue
+
+        if tx_type in {"REWARD", "STAKING INCOME"}:
+            row["TransactionType"] = "STAKING_REWARD"
+            continue
+
+        # No-op for BUY/SELL tokens; keep existing types
+
+    return rows
+
+
+def _normalize_sides(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Clear side for deposit/withdraw/send to avoid confusion.
+
+    - For `TransactionType` in {DEPOSIT, WITHDRAW}, set `Side` to empty string
+    """
+    for row in rows:
+        tx_type = (row.get("TransactionType") or "").strip().upper()
+        if tx_type in {"DEPOSIT", "WITHDRAW"}:
+            row["Side"] = ""
+    return rows
+
+
 def _apply_id_sequence(
     rows: List[Dict[str, Any]], file_cfg: Dict[str, Any]
 ) -> List[Dict[str, Any]]:
@@ -260,7 +299,11 @@ def process_file(
     else:
         raise ValueError(f"Unsupported mapping mode '{mode}' for {input_file.name}")
 
+    # Normalize transaction types to standard subset before filtering
+    mapped_rows = _normalize_transaction_types(mapped_rows)
+
     mapped_rows = _filter_transaction_types(mapped_rows, file_cfg)
+    mapped_rows = _normalize_sides(mapped_rows)
     mapped_rows = _apply_id_sequence(mapped_rows, file_cfg)
 
     out_name = f"{input_file.stem}_mapped.csv"

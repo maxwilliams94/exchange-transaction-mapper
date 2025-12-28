@@ -14,6 +14,17 @@ OUTPUT_HEADERS = [
     "FeeCurrency",
 ]
 
+TRANSACTION_TYPES = {
+    "TRADE",
+    "DEPOSIT",
+    "WITHDRAW",
+    "STAKING_REWARD",
+    "LENDING_REWARD",
+    "AIRDROP",
+    "MINING_REWARD",
+    "FORK",
+}
+
 FIAT_CURRENCIES = {
     "NOK",
     "USD",

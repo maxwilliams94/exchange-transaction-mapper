@@ -21,7 +21,10 @@ MATCH_FEE_ACTION = "MatchFee"
 STAKING_REWARD_ACTION = "StakingReward"
 BANK_DEPOSIT_ACTION = "BankDeposit"
 BANK_WITHDRAW_ACTION = "BankWithdrawal"
-INTERNAL_ACTIONS = {"InternalTransfer", "Stake"}
+WITHDRAW_ACTION = "Withdraw"
+WITHDRAW_FEE_ACTION = "WithdrawFee"
+DEPOSIT_ACTION = "Deposit"
+INTERNAL_ACTIONS = {"InternalTransfer", "Stake", "Unstake", "Bonus"}
 
 
 def _sum_amounts(rows: Iterable[Dict[str, str]]) -> Dict[str, Decimal]:
@@ -60,6 +63,21 @@ def _group_matches(rows: Iterable[Dict[str, str]]) -> DefaultDict[str, List[Dict
         if not match_id:
             continue
         grouped[match_id].append(row)
+    return grouped
+
+
+def _group_withdrawals(rows: Iterable[Dict[str, str]]) -> DefaultDict[str, List[Dict[str, str]]]:
+    """Group Withdraw and WithdrawFee entries by Withdraw ID."""
+    grouped: DefaultDict[str, List[Dict[str, str]]] = defaultdict(list)
+    for row in rows:
+        action = (row.get("Action") or "").strip()
+        if action not in {WITHDRAW_ACTION, WITHDRAW_FEE_ACTION}:
+            continue
+        # Use Withdraw ID to group withdrawals with their fees
+        withdraw_id = (row.get("Withdraw ID") or "").strip()
+        if not withdraw_id:
+            continue
+        grouped[withdraw_id].append(row)
     return grouped
 
 
@@ -130,37 +148,54 @@ def _map_staking_reward(row: Dict[str, str]) -> Dict[str, str]:
     }
 
 
-def _map_bank_entry(row: Dict[str, str], transaction_type: str, side: str) -> Dict[str, str]:
+def _map_bank_entry(row: Dict[str, str], transaction_type: str, side: str, fee_amount: Optional[Decimal] = None, fee_currency: str = "") -> Dict[str, str]:
     currency = (row.get("Currency") or "").upper()
     amount = parse_decimal(row.get("Amount")) or Decimal("0")
     timestamp = parse_firi_timestamp(row.get("Created at", ""))
+    # Normalize WITHDRAW side to match constant
+    normalized_side = "WITHDRAW" if side == "WITHDRAW" else side
     return {
-        "Id": f"firi-{side.lower()}-{row.get('Transaction ID', '')}",
+        "Id": f"firi-{normalized_side.lower()}-{row.get('Transaction ID', '')}",
         "ExchangeId": row.get("Transaction ID", ""),
         "Timestamp": timestamp,
         "Status": "COMPLETED",
         "Market": currency,
         "Exchange": "FIRI",
-        "Side": side,
+        "Side": normalized_side,
         "TransactionType": transaction_type,
         "FilledQuantity": abs_decimal_to_str(amount),
         "FilledQuote": "",
         "FilledPrice": "",
-        "Fee": "",
-        "FeeCurrency": "",
+        "Fee": abs_decimal_to_str(fee_amount) if fee_amount else "",
+        "FeeCurrency": fee_currency,
     }
 
 
 def _map_transactions(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
     grouped = _group_matches(rows)
+    withdrawals = _group_withdrawals(rows)
     mapped: List[Dict[str, str]] = []
 
     for match_id, match_rows in grouped.items():
         mapped.append(_map_match(match_id, match_rows))
 
+    for txid, withdraw_rows in withdrawals.items():
+        # Find the main withdraw row and any associated fees
+        withdraw_row = next((row for row in withdraw_rows if (row.get("Action") or "").strip() == WITHDRAW_ACTION), None)
+        if withdraw_row:
+            # Aggregate any withdraw fees
+            fee_rows = [row for row in withdraw_rows if (row.get("Action") or "").strip() == WITHDRAW_FEE_ACTION]
+            fee_total = Decimal("0")
+            fee_currency = ""
+            if fee_rows:
+                fee_totals = _sum_amounts(fee_rows)
+                fee_currency, fee_total = _select_currency(fee_totals, prefer_fiat=False)
+                fee_total = abs(fee_total)
+            mapped.append(_map_bank_entry(withdraw_row, "WITHDRAW", "WITHDRAW", fee_total, fee_currency))
+
     for row in rows:
         action = (row.get("Action") or "").strip()
-        if action in {MATCH_ACTION, MATCH_FEE_ACTION}:
+        if action in {MATCH_ACTION, MATCH_FEE_ACTION, WITHDRAW_ACTION, WITHDRAW_FEE_ACTION}:
             continue
         if action in INTERNAL_ACTIONS:
             continue
@@ -169,7 +204,9 @@ def _map_transactions(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
         elif action == BANK_DEPOSIT_ACTION:
             mapped.append(_map_bank_entry(row, "DEPOSIT", "DEPOSIT"))
         elif action == BANK_WITHDRAW_ACTION:
-            mapped.append(_map_bank_entry(row, "WITHDRAWAL", "WITHDRAW"))
+            mapped.append(_map_bank_entry(row, "WITHDRAW", "WITHDRAW"))
+        elif action == DEPOSIT_ACTION:
+            mapped.append(_map_bank_entry(row, "DEPOSIT", "DEPOSIT"))
 
     mapped.sort(key=lambda item: item.get("Timestamp", ""))
     return mapped
