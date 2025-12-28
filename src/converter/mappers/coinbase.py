@@ -70,7 +70,12 @@ def load_coinbase_rows(file_path: Path) -> Tuple[List[Dict[str, str]], Dict[str,
 def coinbase_determine_side(
     transaction_type: Optional[str], quantity: Optional[Decimal]
 ) -> str:
-    tx_type = (transaction_type or "").lower()
+    tx_type = (transaction_type or "").strip().lower()
+    mapped_type = TRANSACTION_TYPE_MAP.get(tx_type)
+
+    # Internal transfers should never carry a side
+    if mapped_type == "INTERNAL_TRANSFER" or "transfer" in tx_type:
+        return ""
     if "withdraw" in tx_type:
         return ""
     if "deposit" in tx_type:
