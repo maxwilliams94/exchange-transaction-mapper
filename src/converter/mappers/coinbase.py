@@ -2,12 +2,26 @@ from __future__ import annotations
 
 import csv
 import logging
+import re
+from dataclasses import dataclass
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..utils import parse_decimal
+
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CoinbaseAdvancedTrade:
+    base_amount: Decimal
+    base_currency: str
+    quote_amount: Decimal
+    quote_currency: str
+    market: str
+    price: Decimal
 
 TRANSACTION_TYPE_MAP = {
     "sell": "TRADE",
@@ -23,12 +37,19 @@ TRANSACTION_TYPE_MAP = {
     "withdrawal": "WITHDRAW",
     "exchange withdrawal": "INTERNAL_TRANSFER",
     "pro withdrawal": "WITHDRAW",
+    "pro deposit": "TRADE",
     "send": "WITHDRAW",
     "retail staking transfer": "INTERNAL_TRANSFER",
     "retail unstaking transfer": "INTERNAL_TRANSFER",
 }
 
 # Transaction types are normalized via TRANSACTION_TYPE_MAP to match downstream import expectations.
+
+
+_ADVANCED_TRADE_REGEX = re.compile(
+    r"(?:Bought|Sold)\s+([-0-9.]+)\s+([A-Za-z]+)\s+for\s+([-0-9.]+)\s+([A-Za-z]+)\s+on\s+([A-Za-z]+-[A-Za-z]+)\s+at\s+([-0-9.]+)\s+([A-Za-z]+)/([A-Za-z]+)",
+    re.IGNORECASE,
+)
 
 def load_coinbase_rows(file_path: Path) -> Tuple[List[Dict[str, str]], Dict[str, Any]]:
     """Read a Coinbase export, extracting the account id metadata row."""
@@ -118,3 +139,38 @@ def coinbase_fee_currency(
     if fee_amount is None or not fee_amount:
         return ""
     return (price_currency or "").strip().upper()
+
+
+def coinbase_parse_advanced_trade(notes: Optional[str]) -> Optional[CoinbaseAdvancedTrade]:
+    """Extract advanced trade details from the Coinbase notes text.
+
+    Coinbase advanced trade rows for ETH-USDC include the real quote currency in the
+    notes even when the Price Currency column shows a fiat currency. We parse the
+    amounts and currencies from the notes so downstream balance updates are correct.
+    """
+
+    if not notes:
+        return None
+
+    match = _ADVANCED_TRADE_REGEX.search(notes)
+    if not match:
+        return None
+
+    base_amount = parse_decimal(match.group(1))
+    base_currency = match.group(2).upper()
+    quote_amount = parse_decimal(match.group(3))
+    quote_currency = match.group(4).upper()
+    market = match.group(5).upper()
+    price = parse_decimal(match.group(6))
+
+    if None in (base_amount, quote_amount, price):
+        return None
+
+    return CoinbaseAdvancedTrade(
+        base_amount=base_amount,
+        base_currency=base_currency,
+        quote_amount=quote_amount,
+        quote_currency=quote_currency,
+        market=market,
+        price=price,
+    )

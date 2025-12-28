@@ -19,6 +19,7 @@ from .mappers.coinbase import (
     coinbase_compute_price,
     coinbase_determine_side,
     coinbase_fee_currency,
+    coinbase_parse_advanced_trade,
     coinbase_transaction_type,
 )
 from .mappers.nbx import nbx_trade_breakdown
@@ -45,6 +46,7 @@ _BASE_ENV: Dict[str, Any] = {
     "coinbase_transaction_type": coinbase_transaction_type,
     "coinbase_compute_price": coinbase_compute_price,
     "coinbase_fee_currency": coinbase_fee_currency,
+    "coinbase_parse_advanced_trade": coinbase_parse_advanced_trade,
     "nbx_trade_breakdown": nbx_trade_breakdown,
     "abs": abs,
     "max": max,
