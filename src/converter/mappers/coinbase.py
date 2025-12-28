@@ -100,7 +100,8 @@ def coinbase_determine_side(
         return ""
     if "withdraw" in tx_type:
         return ""
-    if "deposit" in tx_type:
+    # Pro Deposit is a TRADE and needs a side based on quantity; skip deposit check for it
+    if "deposit" in tx_type and "pro" not in tx_type:
         return ""
     if "sell" in tx_type:
         return "SELL"
