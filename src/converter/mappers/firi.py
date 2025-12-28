@@ -179,7 +179,7 @@ def _map_transactions(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
     for match_id, match_rows in grouped.items():
         mapped.append(_map_match(match_id, match_rows))
 
-    for txid, withdraw_rows in withdrawals.items():
+    for withdraw_rows in withdrawals.values():
         # Find the main withdraw row and any associated fees
         withdraw_row = next((row for row in withdraw_rows if (row.get("Action") or "").strip() == WITHDRAW_ACTION), None)
         if withdraw_row:

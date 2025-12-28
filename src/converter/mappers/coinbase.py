@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import csv
+import logging
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+logger = logging.getLogger(__name__)
 
 TRANSACTION_TYPE_MAP = {
     "sell": "TRADE",
@@ -16,11 +18,14 @@ TRANSACTION_TYPE_MAP = {
     "staking income": "STAKING_REWARD",
     "airdrop": "AIRDROP",
     "deposit": "DEPOSIT",
-    "receive": "DEPOSIT",
+    "exchange deposit": "INTERNAL_TRANSFER",
+    "receive": "STAKING_REWARD",
     "withdrawal": "WITHDRAW",
-    "exchange withdrawal": "WITHDRAW",
+    "exchange withdrawal": "INTERNAL_TRANSFER",
     "pro withdrawal": "WITHDRAW",
     "send": "WITHDRAW",
+    "retail staking transfer": "INTERNAL_TRANSFER",
+    "retail unstaking transfer": "INTERNAL_TRANSFER",
 }
 
 # Transaction types are normalized via TRANSACTION_TYPE_MAP to match downstream import expectations.
@@ -67,9 +72,9 @@ def coinbase_determine_side(
 ) -> str:
     tx_type = (transaction_type or "").lower()
     if "withdraw" in tx_type:
-        return "WITHDRAW"
+        return ""
     if "deposit" in tx_type:
-        return "DEPOSIT"
+        return ""
     if "sell" in tx_type:
         return "SELL"
     if "buy" in tx_type:
@@ -83,7 +88,12 @@ def coinbase_transaction_type(transaction_type: Optional[str]) -> str:
     tx_type = (transaction_type or "").strip().lower()
     if not tx_type:
         return "UNKNOWN"
-    return TRANSACTION_TYPE_MAP.get(tx_type, tx_type.upper())
+    mapped = TRANSACTION_TYPE_MAP.get(tx_type)
+    if mapped:
+        return mapped
+    # Warn if transaction type is not in the mapping
+    logger.warning(f"Unknown Coinbase transaction type '{transaction_type}' - using '{tx_type.upper()}' as fallback. Please add this to TRANSACTION_TYPE_MAP if needed.")
+    return tx_type.upper()
 
 
 def coinbase_compute_price(
