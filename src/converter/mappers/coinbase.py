@@ -23,6 +23,7 @@ class CoinbaseAdvancedTrade:
     market: str
     price: Decimal
 
+
 TRANSACTION_TYPE_MAP = {
     "sell": "TRADE",
     "buy": "TRADE",
@@ -118,7 +119,11 @@ def coinbase_transaction_type(transaction_type: Optional[str]) -> str:
     if mapped:
         return mapped
     # Warn if transaction type is not in the mapping
-    logger.warning(f"Unknown Coinbase transaction type '{transaction_type}' - using '{tx_type.upper()}' as fallback. Please add this to TRANSACTION_TYPE_MAP if needed.")
+    logger.warning(
+        f"Unknown Coinbase transaction type '{transaction_type}' - using "
+        f"'{tx_type.upper()}' as fallback. Please add this to TRANSACTION_TYPE_MAP "
+        f"if needed."
+    )
     return tx_type.upper()
 
 
