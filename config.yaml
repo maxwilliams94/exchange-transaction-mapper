@@ -4,6 +4,9 @@ sources:
       - pattern: "*.csv"
         mode: row
         loader: coinbase_transactions
+        ignore_transaction_types:
+          - PRO_DEPOSIT
+          - PRO_WITHDRAWAL
         expected_columns:
           - ID
           - Timestamp
@@ -37,12 +40,13 @@ sources:
           Market: 'advanced_trade.market if advanced_trade else format_market(row.get("Asset"), quote_currency)'
           Exchange: '"COINBASE"'
           Side: 'coinbase_determine_side(row.get("Transaction Type"), quantity)'
-          TransactionType: 'coinbase_transaction_type(transaction_type_lower)'
+          TransactionType: 'coinbase_transaction_type(transaction_type_lower, row.get("Notes"))'
           FilledQuantity: 'abs_decimal_to_str(quantity)'
           FilledQuote: 'abs_decimal_to_str(filled_quote_value)'
           FilledPrice: 'decimal_to_str(filled_price_value)'
           Fee: 'abs_decimal_to_str(fee_amount)'
           FeeCurrency: 'coinbase_fee_currency(fee_price_currency, fee_amount)'
+
 
   nbx:
     files:

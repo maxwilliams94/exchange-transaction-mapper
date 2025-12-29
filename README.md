@@ -195,12 +195,35 @@ sources:
 
 ## Supported Exchanges
 
+
 ### Coinbase
 
-- **File Pattern**: `*transactions*.csv`
-- **Supported Exports**: Standard transaction exports
-- **Transaction Types**: Buy, Sell, Send, Receive, Rewards (via separate file)
-- **Notes**: Rewards exports are currently skipped (to be implemented)
+- **File Pattern**: `*.csv` (standard transaction exports)
+- **Supported Exports**: Standard transaction exports from Coinbase Pro/Advanced
+- **Transaction Types**: Buy, Sell, Rewards, Airdrops, Deposits, Withdrawals
+
+#### Coinbase Transaction Type Mapping
+
+| Exchange Transaction Type | Mapped Type | Notes |
+|--------------------------|-------------|-------|
+| `Buy`, `Advanced Trade Buy` | `TRADE` | Buy transactions |
+| `Sell`, `Advanced Trade Sell` | `TRADE` | Sell transactions |
+| `Reward Income`, `Staking Income` | `STAKING_REWARD` | Staking and reward income |
+| `Receive` | `STAKING_REWARD` | Airdrops and receives (treated as rewards) |
+| `Airdrop` | `AIRDROP` | Airdrop transactions |
+| `Deposit` | `DEPOSIT` | User deposits |
+| `Withdrawal`, `Send` | `WITHDRAW` | User withdrawals |
+| `Exchange Deposit` | `INTERNAL_TRANSFER` | Internal exchange transfers |
+| `Exchange Withdrawal` | `INTERNAL_TRANSFER` | Internal exchange transfers |
+| `Retail Staking Transfer`, `Retail Unstaking Transfer` | `INTERNAL_TRANSFER` | Staking transfers |
+| `Pro Withdrawal` | **EXCLUDED** | Pro account withdrawals (phantom transactions) |
+| `Pro Deposit` | **EXCLUDED** | Pro account deposits (phantom transactions) |
+
+**Key Processing Rules:**
+- **Advanced Trades**: Parsed from notes field to extract actual quote currency and amounts
+- **Crypto/Crypto Trades**: Quotes in NOK (or native currency) when price currency is not fiat
+- **Fee Handling**: Extracted from "Fees and/or Spread" column; currency derived from price currency
+- **Pro Deposits/Withdrawals**: Excluded from processing as they create phantom buy/sell transactions
 
 ### Firi
 
@@ -228,27 +251,71 @@ sources:
 By default, the converter filters out `DEPOSIT` and `WITHDRAWAL` transaction types for exchanges where this is configured. You can customize this in `config.yaml`:
 
 ```yaml
-ignore_transaction_types:
-  - DEPOSIT
-  - WITHDRAWAL
-  - SOME_OTHER_TYPE
-```
-
-Filtered transactions are logged during conversion:
-```
-Filtered 36 row(s) by TransactionType: DEPOSIT, WITHDRAWAL
-```
-
-## Sequential ID Generation
-
-The converter can generate sequential IDs in the format `{prefix}-{number}`:
-
-```yaml
-id_sequence_prefix: kraken
-id_sequence_padding: 6
-```
-
 This produces IDs like: `kraken-000001`, `kraken-000002`, etc.
+### Firi
+
+- **File Pattern**: `*_transactions*.csv`
+- **Supported Exports**: Transaction history including staking rewards, trades, deposits, withdrawals
+- **Processing Mode**: File-level handler (groups and filters transactions)
+
+#### Firi Transaction Type Mapping
+
+| Exchange Action | Mapped Type | Side | Notes |
+|-----------------|------------|------|-------|
+| `Buy` | `TRADE` | `BUY` | Trade purchases |
+| `Sell` | `TRADE` | `SELL` | Trade sales |
+| `Staking Reward` | `STAKING_REWARD` | `BUY` | Staking rewards |
+| `Deposit` | `DEPOSIT` | — | Filtered by default |
+| `Withdrawal` | `WITHDRAW` | — | Filtered by default |
+
+**Key Processing Rules:**
+- File-level processing that groups related transactions by Match ID
+- Default filtering removes DEPOSIT and WITHDRAW transactions (can be configured)
+- Staking rewards mapped as BUY transactions for tax reporting
+- Uses sequential ID generation with `firi` prefix
+
+### NBX
+
+- **File Pattern**: `NBX_annual_report_*.csv`
+- **Supported Exports**: Annual report exports (semicolon-delimited format)
+- **Processing Mode**: Row-by-row mapping
+
+#### NBX Transaction Type Mapping
+
+| Exchange Type | Mapped Type | Detection | Notes |
+|-------------|------------|-----------|-------|
+| `Trade` | `TRADE` | In/Out currencies differ | Automatic buy/sell detection |
+| `Deposit` | `DEPOSIT` | Type = Deposit | User deposits |
+| `Withdrawal` | `WITHDRAW` | Type = Withdrawal | User withdrawals |
+
+**Key Processing Rules:**
+- **Trade Detection**: Classified when In and Out currencies differ
+- **Side Detection**: Determined by which currency is the primary base/quote pair
+- **Fee Handling**: Extracted separately; currency provided in Fee-Currency column
+- **No Filtering**: By default, all transaction types are included
+
+### Kraken
+
+- **File Pattern**: `*ledger*.csv`
+- **Supported Exports**: Ledger exports from Kraken
+- **Processing Mode**: File-level handler (groups by refid)
+
+#### Kraken Transaction Type Mapping
+
+| Ledger Type | Mapped Type | Notes |
+|------------|------------|-------|
+| `trade` | `TRADE` | Matched buy/sell ledger entries |
+| `reward` | `STAKING_REWARD` | Staking and validation rewards |
+| `airdrop` | `AIRDROP` | Airdrop distributions |
+| `deposit` | `DEPOSIT` | User deposits |
+| `withdrawal` | `WITHDRAW` | User withdrawals |
+
+**Key Processing Rules:**
+- **Refid Grouping**: Related ledger entries grouped by `refid` to reconstruct full trades
+- **Trade Reconstruction**: Buy + Sell ledger entries for same trade combined with pricing
+- **Reward Classification**: Automatically classifies staking rewards vs airdrop rewards
+- **Fee Handling**: Extracted from separate fee ledger entries
+- **Default Filtering**: DEPOSIT and WITHDRAWAL typically filtered in config
 
 ## Troubleshooting
 
@@ -256,14 +323,68 @@ This produces IDs like: `kraken-000001`, `kraken-000002`, etc.
 
 If you see an error like:
 ```
+## Mapping Rules Summary
 Error: Missing expected columns in file.csv: ['expected_col']
+### Standardized Transaction Types
 ```
+The converter normalizes all exchange-specific transaction types into a standardized set:
 
+| Standard Type | Purpose | Tax Implications | Notes |
+|--------------|---------|-----------------|-------|
+| `TRADE` | Buy/Sell transactions | Capital gains/losses | Base currency cost and proceeds |
+| `STAKING_REWARD` | Staking/validation rewards | Taxable income | Treated as BUY at market value |
+| `AIRDROP` | Free token distributions | Taxable income | No cost basis, only proceeds |
+| `DEPOSIT` | Inbound transfers (fiat/crypto) | No tax impact | Typically filtered out |
+| `WITHDRAW` | Outbound transfers (fiat/crypto) | No tax impact | Typically filtered out |
+| `INTERNAL_TRANSFER` | Exchange-internal transfers | No tax impact | Excluded from processing |
+
+### Side Determination Rules
 **Solution**: Verify that your CSV export matches the expected format for that exchange, or update `expected_columns` in `config.yaml`.
+The converter determines transaction sides (`BUY`/`SELL`/`DEPOSIT`/`WITHDRAW`) using these rules:
 
+**For TRADE transactions:**
+- If quantity is positive → `BUY`
+- If quantity is negative → `SELL`
+- Explicit side indicators in exchange data override quantity-based detection
+
+**For DEPOSIT/WITHDRAW:**
+- Derived directly from transaction type
+- Usually omitted in output if transaction is filtered
+
+**For REWARD/AIRDROP:**
+- Treated as `BUY` (buying at market value on receipt date)
+- Quantity is the amount received
+
+### Price and Quantity Normalization
 ### File Not Processed
+- **Quantities**: Stored as absolute values; side determines direction
+- **Prices**: Calculated as `|total| / |quantity|` when not explicitly provided
+- **Fee Currency**: Derived from price currency or transaction currency
+- **Fee Amount**: Always stored as positive value
 
+### Exchange-Specific Processing Notes
 If a file is skipped, check:
+**Coinbase Advanced Trades:**
+- Notes field parsed to extract actual base/quote pair (e.g., ETH-USDC)
+- Price currency may be NOK/fiat but actual trade is in different currency
+- Pro account transactions (Pro Deposit/Pro Withdrawal) explicitly excluded to prevent phantom transactions
+
+**Firi File-Level Processing:**
+- Related transactions grouped by Match ID before mapping
+- Allows aggregation of multi-leg transactions
+- Deposits/withdrawals filtered by default
+
+**NBX Trade Detection:**
+- Trade identified when In and Out currencies differ
+- Side (BUY/SELL) determined by currency pair and amount signs
+- Semicolon-delimited format handled automatically
+
+**Kraken Ledger Grouping:**
+- Multiple ledger entries for single trade grouped by refid
+- Reconstructs complete trade from buy and sell entries
+- Handles fees as separate ledger entries
+
+## Transaction Type Filtering
 1. The file pattern in `config.yaml` matches your filename
 2. The file is in the correct subdirectory under `files/input/`
 3. The file isn't marked with `mode: skip` in the configuration

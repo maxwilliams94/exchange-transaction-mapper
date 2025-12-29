@@ -34,11 +34,11 @@ TRANSACTION_TYPE_MAP = {
     "airdrop": "AIRDROP",
     "deposit": "DEPOSIT",
     "exchange deposit": "INTERNAL_TRANSFER",
-    "receive": "STAKING_REWARD",
+    "receive": "RECEIVE",  # further classified via notes
     "withdrawal": "WITHDRAW",
     "exchange withdrawal": "INTERNAL_TRANSFER",
-    "pro withdrawal": "WITHDRAW",
-    "pro deposit": "TRADE",
+    "pro withdrawal": "PRO_WITHDRAWAL",
+    "pro deposit": "PRO_DEPOSIT",
     "send": "WITHDRAW",
     "retail staking transfer": "INTERNAL_TRANSFER",
     "retail unstaking transfer": "INTERNAL_TRANSFER",
@@ -96,6 +96,10 @@ def coinbase_determine_side(
     mapped_type = TRANSACTION_TYPE_MAP.get(tx_type)
 
     # Internal transfers should never carry a side
+    if mapped_type is None:  # Legacy skip
+        return ""
+    if mapped_type == "EXCLUDE":  # Skip Pro Deposit/Withdrawal explicitly
+        return ""
     if mapped_type == "INTERNAL_TRANSFER" or "transfer" in tx_type:
         return ""
     if "withdraw" in tx_type:
@@ -112,11 +116,40 @@ def coinbase_determine_side(
     return "BUY"
 
 
-def coinbase_transaction_type(transaction_type: Optional[str]) -> str:
+def coinbase_classify_receive(notes: Optional[str]) -> str:
+    """Classify Coinbase Receive rows using notes heuristics.
+
+    - Earn/learn/staking hints => STAKING_REWARD
+    - Transfer/wallet/exchange hints => INTERNAL_TRANSFER
+    - Otherwise => DEPOSIT
+    """
+
+    notes_l = (notes or "").strip().lower()
+    if not notes_l:
+        return "DEPOSIT"
+
+    airdrop_hints = ["earn", "learn",]
+    if any(hint in notes_l for hint in airdrop_hints):
+        return "AIRDROP"
+
+    staking_hints = ["staking", "reward"]
+    if any(hint in notes_l for hint in staking_hints):
+        return "AIRDROP"
+
+    transfer_hints = ["transfer", "wallet", "exchange"]
+    if any(hint in notes_l for hint in transfer_hints):
+        return "INTERNAL_TRANSFER"
+
+    return "DEPOSIT"
+
+
+def coinbase_transaction_type(transaction_type: Optional[str], notes: Optional[str] = None) -> str:
     tx_type = (transaction_type or "").strip().lower()
     if not tx_type:
         return "UNKNOWN"
     mapped = TRANSACTION_TYPE_MAP.get(tx_type)
+    if mapped == "RECEIVE":
+        return coinbase_classify_receive(notes)
     if mapped:
         return mapped
     # Warn if transaction type is not in the mapping
@@ -169,7 +202,7 @@ def coinbase_parse_advanced_trade(notes: Optional[str]) -> Optional[CoinbaseAdva
     market = match.group(5).upper()
     price = parse_decimal(match.group(6))
 
-    if None in (base_amount, quote_amount, price):
+    if base_amount is None or quote_amount is None or price is None:
         return None
 
     return CoinbaseAdvancedTrade(
