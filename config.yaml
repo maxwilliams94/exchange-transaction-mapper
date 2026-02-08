@@ -46,6 +46,7 @@ sources:
           FilledPrice: 'decimal_to_str(filled_price_value)'
           Fee: 'abs_decimal_to_str(fee_amount)'
           FeeCurrency: 'coinbase_fee_currency(fee_price_currency, fee_amount)'
+          QuoteCurrency: 'advanced_trade.quote_currency if advanced_trade else "NOK"'
 
 
   nbx:

@@ -15,6 +15,7 @@ dist/
 # Project data directories
 files/input/
 files/output/
+archive/
 
 # macOS metadata
 .DS_Store

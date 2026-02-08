@@ -12,6 +12,7 @@ OUTPUT_HEADERS = [
     "FilledPrice",
     "Fee",
     "FeeCurrency",
+    "QuoteCurrency",
 ]
 
 TRANSACTION_TYPES = {
